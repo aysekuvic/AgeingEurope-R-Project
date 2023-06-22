@@ -1,0 +1,267 @@
+
+
+
+
+# Gapminder: Aging Europe {#gapminder-europe}
+
+
+```{r echo = FALSE, message = FALSE} 
+
+##Loading the packages
+
+library(knitr)
+opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
+options(width = 100, dplyr.width = 100)
+library(tidyverse)
+library(gganimate)
+library(gifski)
+library(readxl)
+
+
+
+```
+
+
+
+
+```{r, message = FALSE} 
+#Not to show any message in Rmd file, I put 'message = FALSE'.
+
+# Importing data( to be able to import csv and excel files, I already must have loaded the readr and readxl)
+
+fertility <- read_csv("data/children_per_woman_total_fertility.csv")
+
+fertility
+
+populationplus <- read_csv("data/population_aged_60plus_years_total_number.csv")
+
+populationplus
+
+population <- read_csv("data/population_total.csv")
+
+population
+
+
+```
+
+
+
+```{r}
+#Importing data
+#First I imported the excel file, and read a specific sheet which is called 'list-of-countries-etc', later on, I rename the two columns name.
+
+excel_sheets ("data/Data Geographies - v1 - by Gapminder.xlsx")
+
+regions <-
+read_excel("data/Data Geographies - v1 - by Gapminder.xlsx", sheet = "list-of-countries-etc") %>%
+   rename("country" = "name", "continent" = four_regions)
+regions
+
+
+```
+
+
+
+```{r}
+
+#Tidying the data # Data Wrangling
+#To be able to tidy the data, first of all, i needed to load tidyr and dplyr packages. Later on, I used pivot_longer function. I reshaped the data from wide to long format. Even though, wide format is better to read and understand the data easily for human, the long format is the one for the computers languages  like R, Python, or SQL.
+
+population %>%
+  pivot_longer(-country, names_to = "years", values_to = "population")
+
+populationplus %>%
+  pivot_longer(-country, names_to = "years", values_to = "population")
+
+fertility %>%
+  pivot_longer(-country, names_to = "years", values_to = "count")
+
+
+
+```
+
+
+
+
+```{r}
+
+# tidying data
+# I assigned objects (data frames) here, objects are essentially containers for the data. It stores the data, I can use it later on in the code. I used these objects in the following join syntaxes.
+
+Allpop <-
+ population %>%
+ pivot_longer(-country, names_to = "years", values_to = "population")
+Allpop
+
+
+plusage <- 
+  populationplus %>%
+  pivot_longer(-country, names_to = "years", values_to = "population")
+plusage
+
+fertilityper <-
+  fertility %>%
+  pivot_longer(-country, names_to = "years", values_to = "count")
+fertilityper
+
+```
+
+
+
+
+```{r}
+
+# Data Wrangling
+## I did data wrangling by joining the tables, and after that, renaming the columns. Data wrangling is transforming the data from one format to another format, so that it is more suitable for analysis as well as visualization. 
+
+gapminder <-
+  Allpop %>%
+  left_join(plusage, by = c("country", "years")) %>%
+  left_join(fertilityper, by = c("country", "years")) %>%
+  left_join(regions, by = c("country" = "country")) %>%
+  rename("population_tot" = population.x, "population_elderly" = population.y, "fertility_rate" = count)
+gapminder
+
+```
+
+
+```{r}
+
+#Data Wrangling
+#I wanted to show from 1950 on, that is why, I filtered the years from 1950 to 2020. There were missing values in population elderly data column, to be able to remove missing data, I used !is.na.
+
+gapminder_1 <- gapminder %>%
+  filter(years >= 1950, !is.na(population_elderly))
+gapminder_1
+
+```
+
+
+```{r}
+# Data Wrangling
+# I created a new column by using mutate function, with mutate function, I did the calculations to be able to reach the population percentage. I used this new percentage column in my vizs.
+
+gapminder_1 <- gapminder_1 %>%
+  mutate(poppercent = (population_elderly/population_tot)*100)
+gapminder_1
+
+```
+
+
+```{r}
+#Data Cleaning
+# I changed years' column's data type from double to integer.This was a necessary data cleaning step for my viz as well as animations as it ensures that the values are treated as discrete numeric values rather than continuous numeric values.
+
+gapminder_1$years <- as.integer(gapminder_1$years)
+
+```
+
+
+```{r}
+#Data Wrangling
+## I filtered years and the continents, and choose only Europe population from 1950 to 2020.
+gapminder_europe <- gapminder_1 %>%
+  filter(continent == "europe") %>%
+  filter(years <= 2020)
+gapminder_europe
+  
+```
+
+```{r}
+# Data Wrangling
+## I wanted to filter the years from 1950 to 2020 by showing all the continents population.
+
+gapminder_allcontinents <- gapminder_1 %>%
+  filter(years <= 2020)
+gapminder_allcontinents
+
+```
+
+
+```{r, warning=FALSE}
+
+# Visualization 
+# The data is wrangled, cleaned, tidied. It is time to do visualization part. The viz indicates relationship between fertility rate and population +60  in Europe. The result is, a great amount of increasing population in Europe.
+
+ggplot(gapminder_europe, aes(x = fertility_rate, y = poppercent, color = continent)) +
+  geom_point(size = 2, color = "blue") + 
+  labs(x = "Fertility Rate", y = "Population Aged +60", color = "Continent", title = " Europe Ageing Population")
+
+
+```
+
+
+```{r}
+
+# Data Animation
+# I compared the four continents in this animation. In Africa, even though, the fertility rate is very high, the aged +60 population is low due to mostly HIV/AIDS epidemic. 
+# Overall, What we see is, for the last decades, when fertility rate was decreasing, Aged +60 population was increasing in all over the world.
+
+gapminder_allcontinents
+ggplot(
+  gapminder_allcontinents, 
+  aes(x = fertility_rate, y=poppercent, size = population_tot, colour = continent, )
+  ) + 
+  geom_point(show.legend = FALSE, alpha = 0.7) +
+  scale_color_viridis_d() +
+  scale_size(range = c(2, 12)) +
+  scale_x_log10() +
+  labs(x = "Fertility Rate", y = "Population Aged +60") + 
+  facet_wrap(~continent) +
+  transition_time(years) +
+  labs(title = "Year: {frame_time}")
+gapminder_allcontinents
+
+```
+
+
+```{r}
+
+#Visualization + Animation
+#In this animation, I specified the Europe Continent. While fertility rate is decreasing, Aged +60 population percent is significantly increasing.
+
+v <- 
+  ggplot(
+  gapminder_europe, 
+  aes(x = fertility_rate, y=poppercent, size = population_tot, colour = continent)
+  ) +
+  geom_point(show.legend = FALSE, alpha = 0.7) +
+  scale_color_viridis_d() +
+  scale_size(range = c(2, 12)) +
+  scale_x_log10() +
+  labs(x = "Fertility Rate", y = "Population Aged +60") + 
+  transition_time(years) +
+  labs(title = "Year: {frame_time}")
+v
+
+anim_save("gapminder_europe.gif", v)
+```
+
+
+```{r}
+#Data Visualization, Animation
+# Turkiye has one of the youngest population in Europe. Throughout the years, the country's population kept increasing. 
+
+gapminder_europe %>%
+  filter(country == "Turkey") %>%
+  ggplot(aes(years, population_tot)) + geom_point() + geom_line() +
+  labs(title = "Turkiye Increasing Population") +
+  theme_minimal() +
+  transition_reveal(years)
+
+```
+
+```{r}
+#Data Visualization, Animation
+# What we see in this animation is, Turkiye's fertility rate per woman  dropped from approx.6 to approx. 2 births over the 70 years. However, this fertility rate per woman was stable during some years. Moreover, there is a drastic fall in the birth rate for recent decades. I need further analysis to figure out the reasons behind these.
+
+gapminder_europe %>%
+  filter(country == "Turkey") %>%
+  ggplot(aes(fertility_rate, poppercent)) + geom_point() + geom_line() +
+  labs(x = "Turkiye Fertility Rate Per Woman", y = " Turkiye Population Aged +60", title = "Turkiye Decreasing Fertility Rate and Increasing Aged + 60 Population") +
+  theme_minimal() +
+  transition_reveal(years)
+
+```
+
+
